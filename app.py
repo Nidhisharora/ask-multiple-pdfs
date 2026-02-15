@@ -2,6 +2,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from pypdf import PdfReader
 from docx import Document
+import base64
+import streamlit.components.v1 as components
 
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -149,6 +151,50 @@ def main():
             type=["pdf", "docx", "txt", "md"],
             accept_multiple_files=True
         )
+
+        # -------- FULL DOCUMENT VIEWER --------
+        if uploaded_files:
+            st.subheader("📄 View Documents")
+
+            for file in uploaded_files:
+                with st.expander(f"📂 {file.name}", expanded=False):
+                    ext = file.name.split(".")[-1].lower()
+
+                    try:
+                        # PDF preview + download (FIXED FOR CHROME)
+                        if ext == "pdf":
+                            file.seek(0)
+                            file_bytes = file.read()
+                            b64 = base64.b64encode(file_bytes).decode('utf-8')
+                            
+                            # Using <embed> with markdown is more reliable in Chrome than <iframe> components
+                            pdf_display = f'<embed src="data:application/pdf;base64,{b64}" width="100%" height="600" type="application/pdf">'
+                            st.markdown(pdf_display, unsafe_allow_html=True)
+                            
+                            st.download_button("Download PDF", file_bytes, file_name=file.name)
+
+                        # DOCX viewer
+                        elif ext == "docx":
+                            file.seek(0)
+                            doc = Document(file)
+                            full_text = "\n".join([p.text for p in doc.paragraphs])
+                            st.text_area("DOCX Content", full_text, height=400)
+                            st.download_button("Download DOCX", file.getvalue(), file_name=file.name)
+
+                        # TXT / MD viewer
+                        elif ext in ["txt", "md"]:
+                            file.seek(0)
+                            text = file.read().decode("utf-8")
+                            st.text_area("Text Content", text, height=400)
+                            st.download_button("Download File", text, file_name=file.name)
+
+                        else:
+                            st.info("File type not supported for direct view.")
+
+                    except Exception as e:
+                        st.error(f"Error reading file: {e}")
+
+        # -----------------------------------
 
         if st.button("Process Documents" if lang=="English" else "दस्तावेज़ प्रोसेस करें"):
             if not uploaded_files:
