@@ -6,7 +6,6 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import Ollama
-from langchain_classic.chains import RetrievalQA
 
 # -------------------------------
 # PDF TEXT EXTRACTION
@@ -28,8 +27,8 @@ def get_pdf_text(pdf_docs):
 def get_text_chunks(text):
     text_splitter = CharacterTextSplitter(
         separator="\n",
-        chunk_size=300,        
-        chunk_overlap=30,
+        chunk_size=220,        
+        chunk_overlap=20,
         length_function=len
     )
     return text_splitter.split_text(text)
@@ -40,7 +39,7 @@ def get_text_chunks(text):
 # -------------------------------
 def get_vectorstore(text_chunks):
     embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
     )
 
     vectorstore = FAISS.from_texts(
@@ -54,7 +53,24 @@ def get_vectorstore(text_chunks):
 # -------------------------------
 # CONVERSATION CHAIN (Optimized)
 # -------------------------------
-def get_conversation_chain(vectorstore):
+def ask_llm(vectorstore, question):
+
+    docs = vectorstore.similarity_search(question, k=1)
+    context = docs[0].page_content if docs else "No context found."
+
+    prompt = f"""
+        You are a helpful assistant.
+        Answer ONLY from the context below.
+        If answer not present, say: Not found in document.
+
+        Context:
+        {context}
+
+        Question:
+        {question}
+
+        Answer in 5 lines maximum:
+        """
 
     llm = Ollama(
         model="phi3:mini",
@@ -63,35 +79,29 @@ def get_conversation_chain(vectorstore):
         num_predict=80
     )
 
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=vectorstore.as_retriever(search_kwargs={"k": 1}),
-        chain_type="stuff"
-    )
-
-    return qa_chain
-
-
+    return llm.invoke(prompt)
 # -------------------------------
 # HANDLE USER INPUT
 # -------------------------------
 def handle_userinput(user_question):
-    if st.session_state.conversation is None:
+    user_question = user_question[:150]
+
+    if st.session_state.vectorstore is None:
         st.warning("Please upload and process documents first.")
         return
 
-    response = st.session_state.conversation.invoke(
-        {"query": user_question}
-    )
+    answer = ask_llm(st.session_state.vectorstore, user_question)
 
     st.markdown(f"**You:** {user_question}")
-    st.markdown(f"**Bot:** {response['result']}")
+    st.markdown(f"**Bot:** {answer}")
 
 
 # -------------------------------
 # MAIN APP
 # -------------------------------
 def main():
+    if "vectorstore" not in st.session_state:
+        st.session_state.vectorstore = None
     load_dotenv()
     st.set_page_config(page_title="Chat with multiple PDFs", page_icon="📚")
 
@@ -116,42 +126,36 @@ def main():
     # ---------------- Sidebar ----------------
     with st.sidebar:
         st.subheader("Your documents")
-
+    
         pdf_docs = st.file_uploader(
             "Upload PDFs and click Process",
             accept_multiple_files=True
         )
-
+    
         # PROCESS BUTTON
         if st.button("Process"):
             if not pdf_docs:
                 st.warning("Please upload at least one PDF.")
                 return
-
-            with st.spinner("Processing..."):
+    
+            with st.spinner("Reading & indexing PDF... (20-40 sec first time)"):
+            
                 raw_text = get_pdf_text(pdf_docs)
-
+    
                 if not raw_text.strip():
                     st.error("No readable text found in PDFs.")
                     return
-
+    
                 text_chunks = get_text_chunks(raw_text)
                 vectorstore = get_vectorstore(text_chunks)
-
-                st.session_state.conversation = get_conversation_chain(
-                    vectorstore
-                )
-
-                st.session_state.processed = True
-                st.success("Processing complete! You can now ask questions.")
-
-        
+    
+                st.session_state.vectorstore = vectorstore
+                st.success("✅ Ready! Ask questions instantly now.")
+    
+        # CLEAR CHAT
         if st.button("Clear Chat"):
-            st.session_state.chat_history = []
-            st.session_state.conversation = None
-            st.session_state.processed = False
-            st.success("Chat cleared. Re-process documents to start again.")
-
+            st.session_state.vectorstore = None
+            st.success("Cleared! Upload & Process again.")
 
 if __name__ == "__main__":
     main()
