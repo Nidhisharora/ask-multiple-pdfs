@@ -5,7 +5,7 @@ from docx import Document
 import base64
 import streamlit.components.v1 as components
 
-from langchain_text_splitters import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaLLM
@@ -45,13 +45,13 @@ def get_all_text(uploaded_files):
 # TEXT SPLITTING
 # -------------------------------
 def get_text_chunks(text):
-    text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=200,
-        chunk_overlap=20,
-        length_function=len
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,          # larger context
+        chunk_overlap=150,       # keeps continuity
+        separators=["\n\n", "\n", ".", " "]
     )
     return text_splitter.split_text(text)
+
 
 
 # -------------------------------
@@ -76,7 +76,7 @@ def load_llm():
     return OllamaLLM(
         model="phi3:mini",
         temperature=0.2,
-        num_predict=150, 
+        num_predict=400, 
         keep_alive=-1
     )
 
@@ -84,7 +84,7 @@ def load_llm():
  
 #  LLm - general ai (Chat-gpt mode)
 
-def ask_general_llm(question, language):
+def ask_general_llm(question, language,chat_history):
     llm = load_llm()
 
     if language == "Hindi":
@@ -101,6 +101,10 @@ Give structured responses when needed.
 
 Question:
 {question}
+
+Previous Conversation:
+{chat_history}
+
 """
 
     return llm.invoke(prompt)
@@ -110,9 +114,10 @@ Question:
 # -------------------------------
 #  ASK LLM (Rag mode if the working with documents)
 # -------------------------------
-def ask_llm(vectorstore, question, language):
+def ask_llm(vectorstore, question, language, chat_history):
 
-    docs = vectorstore.similarity_search(question, k=2)
+
+    docs = vectorstore.similarity_search(question, k=3)
     context = "\n\n".join([doc.page_content for doc in docs]) if docs else "No context found."
 
     if language == "Hindi":
@@ -123,19 +128,30 @@ def ask_llm(vectorstore, question, language):
         not_found_text = "Not found in document."
 
     prompt = f"""
-You are a helpful assistant.
-Answer ONLY using the context below.
-If the answer is not found, say: "{not_found_text}"
-{lang_instruction}
+    You are a precise AI assistant.
 
-Context:
-{context}
+    RULES:
+    1. Use ONLY the provided context.
+    2. Do NOT guess.
+    3. If answer not found, say: "{not_found_text}"
+    4. Answer clearly and structured.
+    5. Respect language instruction.
 
-Question:
-{question}
+    Language Instruction:
+    {lang_instruction}
 
- Answer clearly and concisely:
-"""
+    Previous Conversation:
+    {chat_history}
+
+    Context:
+    {context}
+
+    Question:
+    {question}
+
+    Final Answer:
+    """
+
 
     llm = load_llm()
     return llm.invoke(prompt)
@@ -275,9 +291,16 @@ def main():
         with st.chat_message("assistant"):
             with st.spinner("Thinking..." if lang=="English" else "सोच रहा हूँ..."):
                 if st.session_state.vectorstore is not None:
-                    answer = ask_llm(st.session_state.vectorstore, user_question,lang)
+                    chat_history = "\n".join(
+    [f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-6:]]
+)
+                    answer = ask_llm(st.session_state.vectorstore, user_question, lang, chat_history)
+
                 else:
-                    answer = ask_general_llm(user_question,lang)
+                    chat_history = "\n".join(
+    [f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-6:]]
+)
+                    answer = ask_general_llm(user_question,lang,chat_history)
 
                 st.markdown(answer)
 
