@@ -5,7 +5,7 @@ import faiss
 import numpy as np
 import ollama
 import time
-
+import re
 # ---------------- SETTINGS ----------------
 st.set_page_config(
     page_title="Smart Answer Extractor", 
@@ -392,7 +392,7 @@ else:
     def load_model():
         with st.spinner("🚀 Loading AI model..."):
             time.sleep(1)
-            return SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+            return SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
     
     model = load_model()
     
@@ -404,43 +404,91 @@ else:
         for i, page in enumerate(reader.pages):
             text = page.extract_text()
             if text:
+                text = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', text)
+                text = re.sub(r'\s+', ' ', text)
                 text_pages.append((i+1, text))
             progress_bar.progress((i + 1) / len(reader.pages))
         progress_bar.empty()
         return text_pages
     
-    def split_text(text, chunk_size=500):
+    def split_text(text, chunk_size=400, overlap=80):
         chunks = []
-        for i in range(0, len(text), chunk_size):
-            chunks.append(text[i:i+chunk_size])
+        start = 0
+        while start < len(text):
+            end = start + chunk_size
+            chunks.append(text[start:end])
+            start += chunk_size - overlap
         return chunks
+
+    
+
     
     def create_embeddings(chunks):
-        embeddings = model.encode(chunks, show_progress_bar=True)
-        return np.array(embeddings)
+
+        # Ensure chunks is a flat list of strings
+        cleaned_chunks = [
+            str(chunk) for chunk in chunks
+            if chunk is not None and isinstance(chunk, (str, int, float))
+        ]
+
+        print(f"Total chunks after cleaning: {len(cleaned_chunks)}")
+        print(f"Sample chunk type: {type(cleaned_chunks[0])}")
+
+        embeddings = model.encode(cleaned_chunks, show_progress_bar=True)
+        return embeddings
+        
+
     
-    def search_answer(question, chunks, index):
-        q_embedding = model.encode([question])
-        D, I = index.search(np.array(q_embedding), k=3)
-        return [chunks[i] for i in I[0]]
+    def search_answer(question, chunks, index, k=5, threshold=0.65):
+        q_embedding = model.encode(
+            [question],
+            convert_to_numpy=True,
+            normalize_embeddings=True
+        )
+
+        D, I = index.search(q_embedding, k)
+
+        similarities = 1 - D[0]  # Convert L2 to similarity
+
+        valid_chunks = []
+        for idx, score in zip(I[0], similarities):
+            if score > threshold:
+                valid_chunks.append(chunks[idx])
+
+        return valid_chunks
+    
+       
+
+
     
     def ask_llm(context, question):
         prompt = f"""
-    Answer the question strictly from the context.
-    If not found, say "Answer not found in notes."
-    
+    You are a strict document-based answer extractor.
+
+    Rules:
+    - Use ONLY the information present in the context.
+    - Do NOT use external knowledge.
+    - If answer is not clearly mentioned,
+    respond ONLY with:
+    "Answer not found in notes."
+
     Context:
     {context}
-    
-    Question: {question}
-    Answer in 3-4 lines.
+
+    Question:
+    {question}
+
+    Answer:
     """
+
         response = ollama.chat(
-            model="phi3",
-            messages=[{"role": "user", "content": prompt}]
+            model="tinyllama",
+            messages=[{"role": "user", "content": prompt}],
+            stream=False,
         )
+
         return response["message"]["content"]
-    
+
     # ---------------- SESSION ----------------
     if "chunks" not in st.session_state:
         st.session_state.chunks = []
@@ -516,34 +564,55 @@ else:
         question = st.text_input(
             "What would you like to know from your notes?",
             placeholder="e.g., What is the capital of France?",
-            label_visibility="collapsed"
+            label_visibility="collapsed" 
         )
         
         search_clicked = st.button("🔍 Find Answer", use_container_width=True)
-        
-        if search_clicked and question:
-            with st.spinner("🤔 Searching for the best answer..."):
-                best_chunks = search_answer(
-                    question,
-                    st.session_state.chunks,
-                    st.session_state.index
-                )
-        
-                context = "\n".join(best_chunks)
-                answer = ask_llm(context, question)
-        
+
+        if search_clicked:
+            if not question.strip():
+                st.warning("⚠️ Please enter a question first.")
+            else:
+                answer = None
+                best_chunks = []
+
+                with st.spinner("🤔 Searching for the best answer..."):
+
+                    if "overview" in question.lower() or "summary" in question.lower():
+                        full_text = "\n\n".join(st.session_state.chunks[:30])
+                        answer = ask_llm(full_text, "Summarize this document.")
+                    else:
+                        best_chunks = search_answer(
+                            question,
+                            st.session_state.chunks,
+                            st.session_state.index
+                        )
+
+                        if not best_chunks:
+                            answer = "Answer not found in notes."
+                        else:
+                            context = "\n\n".join(best_chunks)[:1200]
+                            answer = ask_llm(context, question)
+
+                    st.session_state.last_question = question
+                    st.session_state.last_answer = answer
+
+
+                # Display Answer
                 st.markdown('<div class="answer-box">', unsafe_allow_html=True)
                 st.markdown("#### ✅ Answer:")
-                st.markdown(f'<p>{answer}</p>', unsafe_allow_html=True)
+                st.write(answer)
                 st.markdown('</div>', unsafe_allow_html=True)
-        
+
+                # Source Text
                 with st.expander("📖 View Source Text"):
-                    st.markdown('<div style="background: rgba(15,20,35,0.6); padding: 1rem; border-radius: 20px;">', unsafe_allow_html=True)
-                    st.write(best_chunks[0])
+                    st.markdown(
+                        '<div style="background: rgba(15,20,35,0.6); padding: 1rem; border-radius: 20px;">',
+                        unsafe_allow_html=True
+                    )
+                    st.write(answer)
                     st.markdown('</div>', unsafe_allow_html=True)
-        
-        elif search_clicked and not question:
-            st.warning("⚠️ Please enter a question first.")
+
         
         st.markdown('</div>', unsafe_allow_html=True)
     

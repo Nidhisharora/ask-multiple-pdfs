@@ -402,7 +402,7 @@
                 </div>
             </div>
             <div class="badge">
-                <i class="fas fa-microchip"></i> phi3 · all-MiniLM-L6-v2 · FAISS
+                <i class="fas fa-microchip"></i> tinyllama · all-MiniLM-L6-v2 
             </div>
         </div>
 
@@ -414,7 +414,7 @@
                 <div class="feature-grid">
                     <div class="feature-item"><i class="fas fa-file-pdf"></i> PDF reader</div>
                     <div class="feature-item"><i class="fas fa-robot"></i> RAG with FAISS</div>
-                    <div class="feature-item"><i class="fas fa-message"></i> phi3 (ollama)</div>
+                    <div class="feature-item"><i class="fas fa-message"></i> tinyllama (ollama)</div>
                     <div class="feature-item"><i class="fas fa-lock"></i> 100% private</div>
                 </div>
                 <!-- inline mock of the streamlit file_uploader & question -->
@@ -453,7 +453,7 @@
             <div class="showcase-grid">
                 <div class="showcase-text">
                     <h3>⚡ Built with the exact stack you see</h3>
-                    <p>Your Streamlit app uses <strong>PyPDF, sentence-transformers, FAISS and Ollama (phi3)</strong>. We mirror the entire pipeline:</p>
+                    <p>Your Streamlit app uses <strong>PyPDF, sentence-transformers, FAISS and Ollama (tinyllama)</strong>. We mirror the entire pipeline:</p>
                     <div class="steps">
                         <div class="step"><span class="step-num">1</span> <span>read_pdf() → text pages</span></div>
                         <div class="step"><span class="step-num">2</span> <span>split_text(chunk_size=500) → chunks</span></div>
@@ -463,7 +463,7 @@
                     <div>
                         <span class="tech-badge"><i class="fab fa-python"></i> sentence-transformers/all-MiniLM-L6-v2</span>
                         <span class="tech-badge"><i class="fas fa-database"></i> FAISS IndexFlatL2</span>
-                        <span class="tech-badge"><i class="fas fa-brain"></i> phi3 via ollama</span>
+                        <span class="tech-badge"><i class="fas fa-brain"></i> tinyllama via ollama</span>
                     </div>
                 </div>
                 <div class="showcase-code">
@@ -492,11 +492,11 @@
             <div style="background: white; border-radius: 30px; padding: 1.5rem; flex: 1 1 240px;">
                 <i class="fas fa-magnifying-glass" style="font-size: 2rem; background:#e5eafb; padding: 0.7rem; border-radius: 20px;"></i>
                 <h4 style="margin: 1rem 0 0.3rem;">3-best retrieval</h4>
-                <p style="color:#3f4e7a;">search_answer returns top‑3 chunks (k=3) and merges them as context for phi3. Exactly as in your app.</p>
+                <p style="color:#3f4e7a;">search_answer returns top‑3 chunks (k=3) and merges them as context for tinyllama. Exactly as in your app.</p>
             </div>
             <div style="background: white; border-radius: 30px; padding: 1.5rem; flex: 1 1 240px;">
                 <i class="fas fa-microchip" style="font-size: 2rem; background:#e5eafb; padding: 0.7rem; border-radius: 20px;"></i>
-                <h4 style="margin: 1rem 0 0.3rem;">phi3 prompt style</h4>
+                <h4 style="margin: 1rem 0 0.3rem;">tinyllama prompt style</h4>
                 <p style="color:#3f4e7a;">“Answer strictly from context … if not found, say not found”. Exactly your instruction.</p>
             </div>
         </div>
@@ -518,8 +518,8 @@
 
         <!-- footer EXACTLY as in the streamlit script -->
         <footer>
-            <i class="fas fa-heart" style="color: #d44e6c;"></i> Built with ❤️ for students | Offline AI Project <br>
-            <span style="font-size:0.8rem; opacity:0.7;">smart answer extractor · using PyPDF, sentence-transformers, FAISS, phi3 (ollama) </span>
+            Built with ❤️ for students | Offline AI Project <br>
+            <span style="font-size:0.8rem; opacity:0.7;">smart answer extractor · using PyPDF, sentence-transformers, FAISS, tinyllama (ollama) </span>
         </footer>
     </div>
 </body>
